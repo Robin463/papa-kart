@@ -35,6 +35,15 @@ export default function GameScreen() {
   const obstacles = useRef<any[]>([]);
   const isColliding = useSharedValue(false);
   
+  // Ensure car is centered when component mounts
+  useEffect(() => {
+    const centerCar = () => {
+      const centerPosition = width / 2 - CAR_WIDTH / 2;
+      carPosition.value = centerPosition;
+    };
+    centerCar();
+  }, []);
+  
   // Reset game state
   const resetGame = () => {
     obstacles.current = [];
