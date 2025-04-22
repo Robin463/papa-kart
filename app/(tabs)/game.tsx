@@ -21,12 +21,15 @@ const { width, height } = Dimensions.get('window');
 const MOVEMENT_SPEED = 15;
 const CAR_WIDTH = 50;
 const ROAD_PADDING = 8; // Width of the road edge
+const LANE_WIDTH = width / 3;
+const LANES = [0, 1, 2]; // Left, Center, Right lanes
 
 export default function GameScreen() {
   const [gameStarted, setGameStarted] = useState(false);
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [highScore, setHighScore] = useState(0);
+  const [currentLane, setCurrentLane] = useState(1); // Start in center lane
   
   const carPosition = useSharedValue(width / 2 - CAR_WIDTH / 2);
   const gameSpeed = useSharedValue(5);
@@ -35,11 +38,23 @@ export default function GameScreen() {
   const obstacles = useRef<any[]>([]);
   const isColliding = useSharedValue(false);
   
+  // Calculate lane positions
+  const getLanePosition = (lane: number) => {
+    return lane * LANE_WIDTH + (LANE_WIDTH - CAR_WIDTH) / 2;
+  };
+  
+  // Move car to specific lane
+  const moveToLane = (lane: number) => {
+    if (lane >= 0 && lane < LANES.length) {
+      setCurrentLane(lane);
+      carPosition.value = withTiming(getLanePosition(lane), { duration: 100 });
+    }
+  };
+  
   // Ensure car is centered when component mounts
   useEffect(() => {
     const centerCar = () => {
-      const centerPosition = width / 2 - CAR_WIDTH / 2;
-      carPosition.value = centerPosition;
+      carPosition.value = getLanePosition(1); // Center lane
     };
     centerCar();
   }, []);
@@ -47,7 +62,8 @@ export default function GameScreen() {
   // Reset game state
   const resetGame = () => {
     obstacles.current = [];
-    carPosition.value = width / 2 - CAR_WIDTH / 2;
+    carPosition.value = getLanePosition(1);
+    setCurrentLane(1);
     gameSpeed.value = 5;
     setScore(0);
     setGameOver(false);
@@ -90,36 +106,35 @@ export default function GameScreen() {
   useEffect(() => {
     if (Platform.OS === 'web' && gameStarted && !gameOver) {
       const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'ArrowLeft') {
-          const newPosition = Math.max(ROAD_PADDING, carPosition.value - MOVEMENT_SPEED);
-          carPosition.value = withTiming(newPosition, { duration: 100 });
-        } else if (event.key === 'ArrowRight') {
-          const newPosition = Math.min(width - CAR_WIDTH - ROAD_PADDING, carPosition.value + MOVEMENT_SPEED);
-          carPosition.value = withTiming(newPosition, { duration: 100 });
+        if (event.key === 'ArrowLeft' && currentLane > 0) {
+          moveToLane(currentLane - 1);
+        } else if (event.key === 'ArrowRight' && currentLane < LANES.length - 1) {
+          moveToLane(currentLane + 1);
         }
       };
 
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [gameStarted, gameOver]);
+  }, [gameStarted, gameOver, currentLane]);
   
   // Pan gesture for moving the car
   const panGesture = Gesture.Pan()
-    .onUpdate((event) => {
+    .onEnd((event) => {
       if (gameStarted && !gameOver) {
-        const newPosition = Math.max(
-          ROAD_PADDING,
-          Math.min(width - CAR_WIDTH - ROAD_PADDING, carPosition.value + event.translationX)
-        );
-        carPosition.value = withTiming(newPosition, { duration: 100 });
+        if (event.translationX < -50 && currentLane > 0) {
+          moveToLane(currentLane - 1);
+        } else if (event.translationX > 50 && currentLane < LANES.length - 1) {
+          moveToLane(currentLane + 1);
+        }
       }
     });
   
   // Add new obstacle
   const addObstacle = () => {
     if (obstacles.current.length < 5 && Math.random() < 0.05) {
-      const obstacleX = Math.random() * (width - 40 - ROAD_PADDING * 2) + ROAD_PADDING;
+      const lane = Math.floor(Math.random() * LANES.length);
+      const obstacleX = getLanePosition(lane);
       const obstacleId = Date.now().toString();
       obstacles.current.push({
         id: obstacleId,
@@ -127,6 +142,7 @@ export default function GameScreen() {
         y: -50,
         width: 40,
         height: 40,
+        lane: lane
       });
     }
   };
@@ -146,8 +162,7 @@ export default function GameScreen() {
     
     for (const obstacle of obstacles.current) {
       if (
-        carPosition.value < obstacle.x + obstacle.width &&
-        carPosition.value + carWidth > obstacle.x &&
+        obstacle.lane === currentLane &&
         height - 100 < obstacle.y + obstacle.height &&
         height - 100 + carHeight > obstacle.y
       ) {
@@ -196,8 +211,8 @@ export default function GameScreen() {
             <Text style={styles.gameTitle}>PAPA KART</Text>
             <Text style={styles.instructions}>
               {Platform.OS === 'web' 
-                ? 'Use arrow keys or swipe to avoid obstacles'
-                : 'Swipe left and right to avoid obstacles'}
+                ? 'Use arrow keys or swipe to change lanes'
+                : 'Swipe left and right to change lanes'}
             </Text>
             <TouchableOpacity 
               style={styles.startButton}
