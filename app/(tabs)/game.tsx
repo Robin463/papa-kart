@@ -224,7 +224,7 @@ export default function GameScreen() {
                 score={score}
                 highScore={highScore}
                 onRestart={resetGame}
-                onHome={() => router.push('/(tabs)/index')}
+                onHome={() => router.push({ pathname: '/(tabs)' })}
               />
             )}
           </>
